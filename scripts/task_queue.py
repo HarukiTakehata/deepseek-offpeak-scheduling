@@ -2,7 +2,7 @@
 """DeepSeek 峰谷调度任务队列 (JSONL)。
 
 用法:
-  python3 task_queue.py enqueue --cmd "bash xxx.sh" [--desc 描述]   # 脚本任务(no_agent 0 token 执行)
+  python3 task_queue.py enqueue --cmd "bash xxx.sh" [--desc 描述] [--timeout 3600]  # 脚本任务(no_agent 0 token 执行)
   python3 task_queue.py enqueue --prompt "提示词" [--desc 描述]      # LLM 任务(agent 模式执行)
   python3 task_queue.py list [--type cmd|llm]
   python3 task_queue.py count
@@ -53,6 +53,7 @@ def enqueue(args):
         "cmd": args.cmd,
         "prompt": args.prompt,
         "desc": args.desc or "",
+        "timeout": args.timeout,
         "enqueued_at": now(),
     }
     items.append(task)
@@ -90,7 +91,7 @@ def run(args):
     for it in cmd_items:
         body = it.get("cmd") or ""
         try:
-            r = subprocess.run(["bash", "-c", body], capture_output=True, text=True, timeout=600)
+            r = subprocess.run(["bash", "-c", body], capture_output=True, text=True, timeout=it.get("timeout", 600))
             if r.returncode == 0:
                 done.append(it)
                 tail = (r.stdout or "").strip().splitlines()[-3:]
@@ -121,6 +122,7 @@ def main():
     e.add_argument("--cmd", help="脚本命令 (cmd 类型)")
     e.add_argument("--prompt", help="LLM 提示词 (llm 类型)")
     e.add_argument("--desc", default="", help="描述")
+    e.add_argument("--timeout", type=int, default=600, help="cmd 任务超时秒数 (默认 600)")
     e.set_defaults(fn=enqueue)
     l = sub.add_parser("list", help="列出任务")
     l.add_argument("--type", choices=["cmd", "llm"], help="按类型过滤")
