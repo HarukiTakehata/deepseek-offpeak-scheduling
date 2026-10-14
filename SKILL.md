@@ -55,6 +55,7 @@ metadata:
 **陷阱**（2026-09-11 实测补充）：
 - `~` 已重定向，cron script 用绝对路径，且**不要硬编码 home**（cron 侧与交互会话的 `HERMES_HOME` 前缀不同）—— wrapper 从自身位置推导：`HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"`，写死路径会 `script failed`（exit 2）。
 - **排队任务里别写“检查本地克隆”之类操作**（cron 侧看不到 webui 的工作区）：改走 API/网络；必须提本地路径时注明“该路径可能不可见”。
+- **被排队任务调用的自写脚本（含它们 import 的模块）也不得硬编码 home 路径**——不只是 cron --script。实测：测试脚本把 `.env` 路径写死为 webui 侧（`/home/hermeswebui/.hermes/.env`），任务准点触发却直接 `未找到 XXX_API_KEY` 退出（共享卷在 cron 侧是 `/home/hermes/.hermes`）。凡需读密钥/输入的脚本，一律**从脚本自身位置推导**，并列出候选路径回退到环境变量。验证法：把脚本复制到一个假 home 下、`env -u HERMES_HOME HOME=/tmp/fake` 跑一次，能解析到 `/tmp/fake/.env` 才算过。
 - cron 作业 `--deliver` 显式设 `local`（`origin` 对 webui 不可靠）——否则 `last_status=error`。
 - **别用 `write_file` 改队列文件**：`queued-tasks.jsonl` 在 `HERMES_WRITE_SAFE_ROOT`（如 `/opt/data`）之外，会被拒（`Write denied: ... is outside HERMES_WRITE_SAFE_ROOT`）；删行用 shell（`task_queue.py` / `sed -i`）。该拒写会在报告末尾以 "File-mutation verifier" 警告出现 —— 看到它先确认文件是否真被改动。
 - monitor 首 tick 必跑一次；run 失败任务保留重试；价格随时变，重抓官方页更新。
